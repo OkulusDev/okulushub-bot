@@ -53,6 +53,17 @@ def display_currency_prices():
 	print("Cardano (ADA) Price: $", ada_price)
 	print("Dogecoin (DOGE) Price: $", doge_price)
 
+	data = f'''Курс криптовалюты в долларах на {datetime.now()}
+Bitcoin (BTC): $ {btc_price}
+Ethereum (ETH): $ {eth_price}
+Binance (BNB): $ {bnb_price}
+Tether (USDT): $ {usdt_price}
+Cardano (ADA): $ {ada_price}
+Dogecoin (DOGE): $ {doge_price}
+	'''
+
+	return data
+
 
 class Habr:
 	"""Парсер сайта habr.com"""
@@ -75,9 +86,7 @@ class Habr:
 
 		full_article = f'{title}\n{description}\n\nЧитать на хабре: {link}\n\n{TAG}'
 
-		print(full_article)
-		print(article_id)
-		print('\n\n\n')
+		return full_article
 
 	def get_all_articles(self):
 		data = {}
@@ -89,10 +98,6 @@ class Habr:
 
 			full_article = f'{title}\n\nЧитать на хабре: {link}\n\n{TAG}'
 
-			print(full_article)
-			print(article_id)
-			print('\n')
-
 			data[article_id] = {
 				'title': title,
 				'link': link,
@@ -101,8 +106,42 @@ class Habr:
 			}
 
 		# Записываем данные в JSON-файл
-		with open("habr.json", "w", encoding='utf-8') as file:
+		with open("res/habr.json", "w", encoding='utf-8') as file:
 			json.dump(data, file, indent=4)
+
+	def get_fresh_news(self):
+		with open('res/habr.json', 'r') as file:
+			data = json.load(file)
+
+		fresh_news = {}
+
+		for article in self.soup.find_all("h2", class_="tm-title tm-title_h2"):
+			title = article.a.span.text.strip()
+			link = f'https://habr.com{article.a["href"]}'
+			article_id = f'{link.split("/")[:-1][-1]}'
+
+			if article_id in data:
+				continue
+			else:
+				full_article = f'{title}\n\nЧитать на хабре: {link}\n\n{TAG}'
+
+				data[article_id] = {
+					'title': title,
+					'link': link,
+					'tag': TAG,
+					'full': full_article
+				}
+				fresh_news[article_id] = {
+					'title': title,
+					'link': link,
+					'tag': TAG,
+					'full': full_article
+				}
+
+		with open('res/habr.json', 'w') as file:
+			json.dump(data, file, indent=4, ensure_ascii=False)
+
+		return fresh_news
 
 
 class SecurityLab:
@@ -113,6 +152,50 @@ class SecurityLab:
 
 		self.response = requests.get(url, headers=headers).text
 		self.soup = BeautifulSoup(self.response, "lxml")
+
+	def get_fresh_news(self):
+		with open('res/securitylab.json', 'r') as file:
+			data = json.load(file)
+
+		article_cards = self.soup.find_all("a", class_="article-card")
+		fresh_news = {}
+
+		for article in article_cards:
+			article_url = f'https://www.securitylab.ru{article.get("href")}'
+			article_id = article_url.split('/')[-1]
+			article_id = article_id[:-4]
+
+			if article_id in data:
+				continue
+			else:
+				article_title = article.find("h2", class_="article-card-title").text.strip()
+				article_desc = article.find("p").text.strip()
+				article_url = f'https://www.securitylab.ru{article.get("href")}'
+				
+				article_date_time = article.find("time").get("datetime")
+				date_from_iso = datetime.fromisoformat(article_date_time)
+				date_time = datetime.strftime(date_from_iso, "%Y-%m-%d %H:%M:%S")
+				article_date_timestamp = time.mktime(datetime.strptime(date_time, "%Y-%m-%d %H:%M:%S").timetuple())
+
+				data[article_id] = {
+					'article_date_timestamp': article_date_timestamp,
+					'article_title': article_title,
+					'article_url': article_url,
+					'article_desc': article_desc,
+					'tag': TAG
+				}
+				fresh_news[article_id] = {
+					'article_date_timestamp': article_date_timestamp,
+					'article_title': article_title,
+					'article_url': article_url,
+					'article_desc': article_desc,
+					'tag': TAG
+				}
+
+		with open('res/securitylab.json', 'w') as file:
+			json.dump(data, file, indent=4, ensure_ascii=False)
+
+		return fresh_news
 
 	def get_all_articles(self):
 		article_cards = self.soup.find_all("a", class_="article-card")
@@ -140,7 +223,7 @@ class SecurityLab:
 				'tag': TAG
 			}
 
-		with open('securitylab.json', 'w') as file:
+		with open('res/securitylab.json', 'w') as file:
 			json.dump(articles_dict, file, indent=4)
 
 
@@ -149,7 +232,8 @@ if __name__ == '__main__':
 	seclab = SecurityLab()
 	habr.get_all_articles()
 	seclab.get_all_articles()
-	display_currency_prices()
-	# with open("habr.json", "r") as file:
-	# 	data = json.load(file)
-	# print(data)
+
+	fresh_seclab = seclab.get_fresh_news()
+	fresh_habr = habr.get_fresh_news()
+	
+	crypto = display_currency_prices()
